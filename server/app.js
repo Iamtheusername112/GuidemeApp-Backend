@@ -40,8 +40,13 @@ app.use("/", indexRoutes);
 const authRouter = require("./controllers/authController");
 app.use("/auth", authRouter);
 
+// userController Route
 const userController = require("./controllers/userController");
 app.use("/user", userController);
+
+// postController Route
+const postController = require("./controllers/postController");
+app.use("/post", postController);
 
 // ❗ To handle errors. Routes that don't exist or errors that you handle in specific routes
 require("./error-handling")(app);
