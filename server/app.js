@@ -48,6 +48,10 @@ app.use("/user", userController);
 const postController = require("./controllers/postController");
 app.use("/post", postController);
 
+// commentController Route
+const commentController = require("./controllers/commentController");
+app.use("/comment", commentController);
+
 // ❗ To handle errors. Routes that don't exist or errors that you handle in specific routes
 require("./error-handling")(app);
 
