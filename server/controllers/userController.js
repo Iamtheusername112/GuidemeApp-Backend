@@ -1,231 +1,187 @@
-const User = require("../models/User.model");
+const express = require("express");
 const bcrypt = require("bcrypt");
-const userController = require("express").Router();
-const Post = require("../models/Post");
+const mongoose = require("mongoose");
 const verifyToken = require("../middlewares/verifyToken");
+const User = require("../models/User.model");
+const Post = require("../models/Post");
+
+const userController = express.Router();
 
 // Get suggested users
 userController.get("/find/suggestedUsers", verifyToken, async (req, res) => {
-  console.log(req.user);
   try {
     const currentUser = await User.findById(req.user.id);
     const users = await User.find({}).select("-password");
-    // if we do not follow this user and if the user is not currentUser
-    let suggestedUsers = users.filter((user) => {
-      return (
+
+    let suggestedUsers = users.filter(
+      (user) =>
         !currentUser.followings.includes(user._id) &&
         user._id.toString() !== currentUser._id.toString()
-      );
-    });
-    //return the first 5 users only
-    if (suggestedUsers.length > 5) {
-      suggestedUsers = suggestedUsers.slice(0, 5);
-    }
+    );
+
+    // Return the first 5 users only
+    suggestedUsers = suggestedUsers.slice(0, 5);
 
     return res.status(200).json(suggestedUsers);
   } catch (error) {
-    return res.status(500).json(error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
 // Get friends
-
 userController.get("/find/friends", verifyToken, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.id);
-    console.log(currentUser.followings);
     const friends = await Promise.all(
-      currentUser.followings.map((friendId) => {
-        return User.findById(friendId).select("-password");
-      })
+      currentUser.followings.map((friendId) =>
+        User.findById(friendId).select("-password")
+      )
     );
-
-    console.log(friends);
 
     return res.status(200).json(friends);
   } catch (error) {
-    return res.status(500).json(error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-//Get one/individual user
+// Get one/individual user
 userController.get("/find/:userId", verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
 
     if (!user) {
-      return res.status(500).json({ msg: "No such user, wrong id!" });
+      return res.status(404).json({ msg: "User not found" });
     }
 
     const { password, ...others } = user._doc;
 
     return res.status(200).json(others);
   } catch (error) {
-    return res.status(500).json(error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-//Get all
+// Get all users (without sensitive info)
 userController.get("/findAll", async (req, res) => {
   try {
-    const users = await User.find({});
+    const users = await User.find({}).select("username email _id createdAt");
 
-    const formattedUsers = users.map((user) => {
-      return {
-        username: user.username,
-        email: user.email,
-        _id: user._id,
-        createdAt: user.createdAt,
-      };
-    });
-
-    return res.status(200).json(formattedUsers);
+    return res.status(200).json(users);
   } catch (error) {
-    return res.status(500).json(error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
-//Update
+// Update user
 userController.put("/updateUser/:userId", verifyToken, async (req, res) => {
-  //checking if the profile the user is gonna be updating is his own profile
-  if (req.params.userId.toString() === req.user.id.toString()) {
-    try {
-      // we have to hash the password incase if the user changes or incase if we wanna change it
-      if (req.body.passwprd) {
-        req.body.password = await bcrypt.hash(req.body.password, 10);
-      }
-    } catch (error) {
-      res.status(500).json(error.message);
+  try {
+    const { userId } = req.params;
+
+    if (userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ msg: "You can only update your own profile" });
+    }
+
+    if (req.body.password) {
+      req.body.password = await bcrypt.hash(req.body.password, 10);
     }
 
     const updatedUser = await User.findByIdAndUpdate(
-      req.params.userId,
+      userId,
       { $set: req.body },
       { new: true }
     );
 
     return res.status(200).json({ msg: "Successfully updated the user" });
-  } else {
-    return res
-      .status(403)
-      .json({ msg: "You can change only your own profile" });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 
-//delete
-
+// Delete user
 userController.delete("/deleteUser/:userId", verifyToken, async (req, res) => {
-  if (req.params.userId === req.user.id) {
-    try {
-      await User.findByIdAndDelete(req.user.id);
-      return res.status(200).json({ msg: "User successfully deleted" });
-    } catch (error) {
-      res.status(500).json(error.message);
+  try {
+    const { userId } = req.params;
+
+    if (userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ msg: "You can only delete your own profile" });
     }
-  } else {
-    return res
-      .status(403)
-      .json({ msg: "You can delete only your own profile" });
+
+    await User.findByIdAndDelete(userId);
+    return res.status(200).json({ msg: "User successfully deleted" });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 
-//follow and unfollow
+// Follow and unfollow users
 userController.put(
   "/toggleFollow/:otherUserId",
   verifyToken,
   async (req, res) => {
     try {
+      const { otherUserId } = req.params;
       const currentUserId = req.user.id;
-      const otherUserId = req.params.otherUserId;
 
       if (currentUserId === otherUserId) {
-        throw new Error("You can't follow yourself");
+        return res.status(400).json({ msg: "You can't follow yourself" });
       }
 
       const currentUser = await User.findById(currentUserId);
       const otherUser = await User.findById(otherUserId);
 
-      // This code below is saying if we dont follow him, then we will  follow him
-      if (!currentUser.followings.includes(otherUserId)) {
-        currentUser.followings.push(otherUserId);
-        otherUser.followers.push(currentUserId);
+      const toggleFollowUser = async (user, userId) => {
+        user.followings.includes(userId)
+          ? user.followings.pull(userId)
+          : user.followings.push(userId);
 
-        await User.findByIdAndUpdate(
-          currentUserId,
-          { $set: currentUser },
-          { new: true }
-        );
-        await User.findByIdAndUpdate(
-          otherUserId,
-          { $set: otherUser },
-          { new: true }
-        );
+        await user.save();
+      };
 
-        return res
-          .status(200)
-          .json({ msg: "You have successfully followed this user!" });
-      }
-      // So if we are already following the user, then we need to remove ourselves from the array
-      else {
-        currentUser.followings = currentUser.followings.filter(
-          (id) => id !== otherUserId
-        );
-        otherUser.followers = otherUser.followers.filter(
-          (id) => id !== currentUserId
-        );
+      await Promise.all([
+        toggleFollowUser(currentUser, otherUserId),
+        toggleFollowUser(otherUser, currentUserId),
+      ]);
 
-        await User.findByIdAndUpdate(
-          currentUserId,
-          { $set: currentUser },
-          { new: true }
-        );
-        await User.findByIdAndUpdate(
-          otherUserId,
-          { $set: otherUser },
-          { new: true }
-        );
-
-        return res
-          .status(200)
-          .json({ msg: "You have successfully unfollowed the user!" });
-      }
+      return res.status(200).json({ msg: "Toggle follow success" });
     } catch (error) {
-      res.status(500).json(error.message);
+      return res.status(500).json({ error: error.message });
     }
   }
 );
 
-//Bookmark
+// Bookmark a post
 userController.put("/bookmark/:postId", verifyToken, async (req, res) => {
   try {
     const post = await Post.findById(req.params.postId).populate(
       "user",
       "-password"
     );
+
     if (!post) {
-      return res.status(500).json({ msg: "No such post" });
-    } else {
-      if (
-        post.user.bookmarkedPosts.some((post) => post._id === req.params.postId)
-      ) {
-        await User.findByIdAndUpdate(req.user.id, {
-          $pull: { bookmarkedPosts: post }, //Pull here means we are removing the bookemarked post from the array
-        });
-        return res
-          .status(200)
-          .json({ msg: "Successfully unbookmarked the post" });
-      } else {
-        console.log(post);
-        await User.findByIdAndUpdate(req.user.id, {
-          $addToSet: { bookmarkedPosts: post },
-        });
-        return res
-          .status(200)
-          .json({ msg: "Successfully boomkarked the post" });
-      }
+      return res.status(404).json({ msg: "Post not found" });
     }
+
+    const currentUser = await User.findById(req.user.id);
+    const { bookmarkedPosts } = currentUser;
+
+    const postIndex = bookmarkedPosts.findIndex(
+      (post) => post._id.toString() === req.params.postId
+    );
+
+    if (postIndex !== -1) {
+      bookmarkedPosts.splice(postIndex, 1);
+    } else {
+      bookmarkedPosts.push(post);
+    }
+
+    await currentUser.save();
+    return res.status(200).json({ msg: "Toggle bookmark success" });
   } catch (error) {
-    return res.status(500).json(error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
