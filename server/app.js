@@ -29,9 +29,19 @@ const projectName = "server";
 
 app.locals.appTitle = `${capitalize(projectName)} created with IronLauncher`;
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true })); //this and the code directly above it gives us access to data from the req.body
+
 // 👇 Start handling routes here
 const indexRoutes = require("./routes/index.routes");
 app.use("/", indexRoutes);
+
+// AUthRouter
+const authRouter = require("./controllers/authController");
+app.use("/auth", authRouter);
+
+const userController = require("./controllers/userController");
+app.use("/user", userController);
 
 // ❗ To handle errors. Routes that don't exist or errors that you handle in specific routes
 require("./error-handling")(app);
