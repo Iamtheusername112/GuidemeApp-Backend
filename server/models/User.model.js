@@ -20,22 +20,28 @@ const UserSchema = new Schema(
       type: String,
       default: "",
     },
-    followings: {
-      type: String,
-      default: "",
-    },
-    followers: {
-      type: String,
-      default: [],
-    },
+    followings: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    followers: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
     bio: {
       type: String,
       default: "",
     },
-    BookmarkedPosts: {
-      type: Array,
-      default: [],
-    },
+    BookmarkedPosts: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Post",
+      },
+    ],
   },
   {
     // this second object adds extra properties: `createdAt` and `updatedAt`
