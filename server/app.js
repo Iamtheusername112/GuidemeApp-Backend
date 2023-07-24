@@ -29,6 +29,8 @@ const projectName = "server";
 
 app.locals.appTitle = `${capitalize(projectName)} created with IronLauncher`;
 
+app.use("./images", express.static("public/images"));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); //this and the code directly above it gives us access to data from the req.body
 
@@ -51,6 +53,10 @@ app.use("/post", postController);
 // commentController Route
 const commentController = require("./controllers/commentController");
 app.use("/comment", commentController);
+
+// commentController Route
+const uploadController = require("./controllers/uploadController");
+app.use("/upload", uploadController);
 
 // ❗ To handle errors. Routes that don't exist or errors that you handle in specific routes
 require("./error-handling")(app);

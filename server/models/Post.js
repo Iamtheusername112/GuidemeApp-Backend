@@ -13,6 +13,12 @@ const PostSchema = new mongoose.Schema(
       default: "",
     },
 
+    title: {
+      type: String,
+      required: true,
+      min: 4,
+    },
+
     description: {
       type: String,
       default: "",
