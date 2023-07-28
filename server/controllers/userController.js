@@ -153,35 +153,37 @@ userController.put(
   }
 );
 
-// Bookmark a post
+// bookmark
 userController.put("/bookmark/:postId", verifyToken, async (req, res) => {
   try {
     const post = await Post.findById(req.params.postId).populate(
       "user",
       "-password"
     );
-
     if (!post) {
-      return res.status(404).json({ msg: "Post not found" });
-    }
-
-    const currentUser = await User.findById(req.user.id);
-    const { bookmarkedPosts } = currentUser;
-
-    const postIndex = bookmarkedPosts.findIndex(
-      (post) => post._id.toString() === req.params.postId
-    );
-
-    if (postIndex !== -1) {
-      bookmarkedPosts.splice(postIndex, 1);
+      return res.status(500).json({ msg: "No such post" });
     } else {
-      bookmarkedPosts.push(post);
+      if (
+        post.user.bookmarkedPosts.some((post) => post._id === req.params.postId)
+      ) {
+        await User.findByIdAndUpdate(req.user.id, {
+          $pull: { bookmarkedPosts: post },
+        });
+        return res
+          .status(200)
+          .json({ msg: "Successfully unbookmarked the post" });
+      } else {
+        console.log(post);
+        await User.findByIdAndUpdate(req.user.id, {
+          $addToSet: { bookmarkedPosts: post },
+        });
+        return res
+          .status(200)
+          .json({ msg: "Successfully boomkarked the post" });
+      }
     }
-
-    await currentUser.save();
-    return res.status(200).json({ msg: "Toggle bookmark success" });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json(error.message);
   }
 });
 
